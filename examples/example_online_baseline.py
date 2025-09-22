@@ -6,6 +6,8 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+import sys
+sys.path.append("/root/autodl-tmp/deepconf")
 import json
 import pickle
 import argparse
@@ -14,6 +16,7 @@ from vllm import SamplingParams
 from deepconf import DeepThinkLLM
 from dynasor.core.evaluator import math_equal
 import time
+
 
 # ============= PROMPT PREPARATION FUNCTIONS =============
 

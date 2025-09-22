@@ -9,6 +9,13 @@
           </advancedOptions>
         </fileTransfer>
       </webServer>
+      <webServer id="5d46cf5d-6a34-4aa4-96c9-b5ebe2bb1fd1" name="autodl-L20">
+        <fileTransfer accessType="SFTP" host="connect.bjc1.seetacloud.com" port="54459" sshConfigId="42d2ce39-f3d5-4428-971a-f084f8d6c60c" sshConfig="root@connect.bjc1.seetacloud.com:54459 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
     </option>
   </component>
 </project>

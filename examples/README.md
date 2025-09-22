@@ -22,7 +22,7 @@ The **voting algorithms** reported here are applied **after the online filtering
 For a fair comparison, run the baseline (no early-exit):
 
 ```bash
-python examples/example_online_baseline.py --qid $1 --rid $2 --dataset brumo_2025.jsonl --total_budget 256 --output_dir baseline-dpsk
+python examples/example_online_baseline.py --qid $1 --rid $2 --dataset brumo_2025.jsonl --budget 256 --output_dir baseline-dpsk
 ```
 
 ### Baseline Results (Summary)

@@ -9,10 +9,10 @@ import argparse
 import json
 import pickle
 from datetime import datetime
-import sys
 import os
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"]="spawn"
-sys.path.append("/users/jty/deepconf")
+import sys
+sys.path.append("/root/autodl-tmp/deepconf")
 from dynasor.core.evaluator import math_equal
 from vllm import SamplingParams
 
@@ -256,6 +256,7 @@ def main():
                         help='Question ID to process (0-based index)')
     parser.add_argument('--rid', type=str, default="online_run",
                         help='Run ID for identification')
+    parser.add_argument('--max_qid', type=int, default=None)
     parser.add_argument('--warmup_traces', type=int, default=16,
                         help='Number of warmup traces')
     parser.add_argument('--total_budget', type=int, default=256,
@@ -288,82 +289,156 @@ def main():
     with open(args.dataset, 'r', encoding='utf-8') as file:
         data = [json.loads(line.strip()) for line in file]
 
-    # Validate question ID
-    if args.qid >= len(data) or args.qid < 0:
-        raise ValueError(f"Question ID {args.qid} is out of range (0-{len(data) - 1})")
 
-    question_data = data[args.qid]
-    question = question_data['question']
-    ground_truth = str(question_data.get('answer', '')).strip()
-
-    print(f"Processing question {args.qid}: {question[:100]}...")
 
     # Initialize DeepThinkLLM
     deep_llm = DeepThinkLLM(model=args.model,
                             tensor_parallel_size=args.tensor_parallel_size,
                             enable_prefix_caching=True,
-                            gpu_memory_utilization=0.8,
-                            max_model_len=8192)
+                            # gpu_memory_utilization=0.8,
+                            # max_model_len=8192
+                            )
+    if args.max_qid is not None:
+        # Validate question ID
+        if args.max_qid >= len(data) or args.max_qid < 0:
+            raise ValueError(f"Question ID {args.max_qid} is out of range (0-{len(data) - 1})")
 
-    # Prepare prompt
-    print("Preparing prompt...")
-    if args.model_type == "gpt":
-        prompt = prepare_prompt_gpt(question, deep_llm.tokenizer)
+
+        for qid in range(args.max_qid):
+            print(f"Processing question {qid}: {question[:100]}...")
+            question_data = data[qid]
+            question = question_data['question']
+            ground_truth = str(question_data.get('answer', '')).strip()
+            # Prepare prompt
+            print("Preparing prompt...")
+            if args.model_type == "gpt":
+                prompt = prepare_prompt_gpt(question, deep_llm.tokenizer)
+            else:
+                prompt = prepare_prompt(question, deep_llm.tokenizer, args.model_type)
+
+            sampling_params = SamplingParams(
+                temperature=args.temperature,
+                top_p=args.top_p,
+                top_k=args.top_k,
+                max_tokens=args.max_tokens,
+                logprobs=20,
+            )
+
+            # Run deep thinking in online mode
+            result = deep_llm.deepthink(
+                prompt=prompt,
+                mode="online",
+                warmup_traces=args.warmup_traces,
+                total_budget=args.total_budget,
+                confidence_percentile=args.confidence_percentile,
+                window_size=args.window_size,
+                compute_multiple_voting=not args.no_multiple_voting,
+                sampling_params=sampling_params
+            )
+
+            # Evaluate results against ground truth
+            evaluation = None
+            confidence_eval = None
+
+            if ground_truth:
+                if result.voting_results:
+                    evaluation = evaluate_voting_results(result.voting_results, ground_truth)
+
+                confidence_eval = evaluate_confidence_methods(result, ground_truth)
+                print_evaluation_report(question, ground_truth, evaluation, confidence_eval, result)
+
+            # Save results
+            import os
+            os.makedirs(args.output_dir, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            result_data = result.to_dict()
+            result_data.update({
+                'question': question,
+                'ground_truth': ground_truth,
+                'qid': qid,
+                'run_id': args.rid,
+                'evaluation': evaluation,
+                'confidence_evaluation': confidence_eval
+            })
+
+            result_filename = f"{args.output_dir}/deepthink_online_qid{qid}_rid{args.rid}_{timestamp}.pkl"
+
+            with open(result_filename, 'wb') as f:
+                pickle.dump(result_data, f)
+
+            print(f"\nResults saved to {result_filename}")
+
     else:
-        prompt = prepare_prompt(question, deep_llm.tokenizer, args.model_type)
+        # Validate question ID
+        if args.qid >= len(data) or args.qid < 0:
+            raise ValueError(f"Question ID {args.qid} is out of range (0-{len(data) - 1})")
 
-    sampling_params = SamplingParams(
-        temperature=args.temperature,
-        top_p=args.top_p,
-        top_k=args.top_k,
-        max_tokens=args.max_tokens,
-        logprobs=20,
-    )
+        print(f"Processing question {args.qid}: {question[:100]}...")
+        question_data = data[args.qid]
+        question = question_data['question']
+        ground_truth = str(question_data.get('answer', '')).strip()
+        # Prepare prompt
+        print("Preparing prompt...")
+        if args.model_type == "gpt":
+            prompt = prepare_prompt_gpt(question, deep_llm.tokenizer)
+        else:
+            prompt = prepare_prompt(question, deep_llm.tokenizer, args.model_type)
 
-    # Run deep thinking in online mode
-    result = deep_llm.deepthink(
-        prompt=prompt,
-        mode="online",
-        warmup_traces=args.warmup_traces,
-        total_budget=args.total_budget,
-        confidence_percentile=args.confidence_percentile,
-        window_size=args.window_size,
-        compute_multiple_voting=not args.no_multiple_voting,
-        sampling_params=sampling_params
-    )
+        sampling_params = SamplingParams(
+            temperature=args.temperature,
+            top_p=args.top_p,
+            top_k=args.top_k,
+            max_tokens=args.max_tokens,
+            logprobs=20,
+        )
 
-    # Evaluate results against ground truth
-    evaluation = None
-    confidence_eval = None
+        # Run deep thinking in online mode
+        result = deep_llm.deepthink(
+            prompt=prompt,
+            mode="online",
+            warmup_traces=args.warmup_traces,
+            total_budget=args.total_budget,
+            confidence_percentile=args.confidence_percentile,
+            window_size=args.window_size,
+            compute_multiple_voting=not args.no_multiple_voting,
+            sampling_params=sampling_params
+        )
 
-    if ground_truth:
-        if result.voting_results:
-            evaluation = evaluate_voting_results(result.voting_results, ground_truth)
+        # Evaluate results against ground truth
+        evaluation = None
+        confidence_eval = None
 
-        confidence_eval = evaluate_confidence_methods(result, ground_truth)
-        print_evaluation_report(question, ground_truth, evaluation, confidence_eval, result)
+        if ground_truth:
+            if result.voting_results:
+                evaluation = evaluate_voting_results(result.voting_results, ground_truth)
 
-    # Save results
-    import os
-    os.makedirs(args.output_dir, exist_ok=True)
+            confidence_eval = evaluate_confidence_methods(result, ground_truth)
+            print_evaluation_report(question, ground_truth, evaluation, confidence_eval, result)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    result_data = result.to_dict()
-    result_data.update({
-        'question': question,
-        'ground_truth': ground_truth,
-        'qid': args.qid,
-        'run_id': args.rid,
-        'evaluation': evaluation,
-        'confidence_evaluation': confidence_eval
-    })
+        # Save results
+        import os
+        os.makedirs(args.output_dir, exist_ok=True)
 
-    result_filename = f"{args.output_dir}/deepthink_online_qid{args.qid}_rid{args.rid}_{timestamp}.pkl"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        result_data = result.to_dict()
+        result_data.update({
+            'question': question,
+            'ground_truth': ground_truth,
+            'qid': args.qid,
+            'run_id': args.rid,
+            'evaluation': evaluation,
+            'confidence_evaluation': confidence_eval
+        })
 
-    with open(result_filename, 'wb') as f:
-        pickle.dump(result_data, f)
+        result_filename = f"{args.output_dir}/deepthink_online_qid{args.qid}_rid{args.rid}_{timestamp}.pkl"
 
-    print(f"\nResults saved to {result_filename}")
+        with open(result_filename, 'wb') as f:
+            pickle.dump(result_data, f)
+
+        print(f"\nResults saved to {result_filename}")
+
+
 
 
 if __name__ == "__main__":
