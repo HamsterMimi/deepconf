@@ -356,6 +356,9 @@ def process_batch_results_offline(batch_outputs, window_size: int) -> Dict[str, 
     # question_outputs = batch_outputs[0].outputs
     question_outputs = []
     for output_list in batch_outputs:
+        print("output_list.outputs:", output_list.outputs)
+        input("enter any key to continue, deepconf/utils: line 360")
+
         question_outputs += output_list.outputs
 
     # Process all traces for this question
