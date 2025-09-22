@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="492d5a09-520d-42ae-98c4-80c995497705" name="bnu-253">
+        <fileTransfer accessType="SFTP" host="172.16.185.253" port="7712" sshConfigId="4993f451-b73e-46ef-b715-e589e4c3688b" sshConfig="jty@172.16.185.253:7712 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
